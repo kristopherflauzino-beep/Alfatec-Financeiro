@@ -7,17 +7,13 @@
 .password-eye-toggle:hover{background:rgba(115,163,208,.15)!important;color:white!important}
 .password-eye-toggle:focus-visible{outline:2px solid #66d0ff!important;outline-offset:2px}
 .password-eye-toggle svg{width:21px;height:21px;display:block;pointer-events:none}
+
+.signup-link{display:block;width:100%;margin-top:13px;padding:13px 14px;border-radius:11px;border:1px solid #3a5e82;background:#142d4d;color:#f0f7ff;text-align:center;font-size:16px;font-weight:700;text-decoration:none;transition:background .15s}
+.signup-link:hover{background:#1d406a}.signup-link:focus-visible{outline:2px solid #66d0ff;outline-offset:2px}
 </style></head><body><main><img src="/logo.webp" alt="Logo AlfaTec"><h1>AlfaTec Financeiro</h1><p>Acesso seguro com auditoria</p><form id="form"><label for="u">Usuário</label><input id="u" name="username" autocomplete="username" required maxlength="40" placeholder="Usuario" autofocus><label for="p">Senha</label><input id="p" type="password" name="password" autocomplete="current-password" required><button id="submit">Entrar com segurança</button><div id="alert" role="alert" aria-live="polite"></div></form>
-<button type="button" class="secondary" id="create-toggle" aria-expanded="false" aria-controls="register-form">Criar usuário</button>
-<form id="register-form" hidden><h2>Solicitar acesso</h2><p class="sub">Seu cadastro será aprovado pelo administrador principal antes do primeiro login.</p>
-<label for="rn">Nome completo</label><input id="rn" required minlength="2" maxlength="120" autocomplete="name">
-<label for="ru">Novo usuário</label><input id="ru" required minlength="3" maxlength="40" autocomplete="username">
-<label for="rp">Senha (mínimo 6 caracteres)</label><input id="rp" type="password" required minlength="6" maxlength="256" autocomplete="new-password">
-<label for="rc">Confirmar senha</label><input id="rc" type="password" required minlength="6" autocomplete="new-password">
-<button id="register-submit">Solicitar cadastro</button><div id="register-alert" role="status" aria-live="polite"></div></form><footer>Alterações registradas por usuário • AlfaTec</footer></main><script>
+<a class="signup-link" href="/cadastro.html">Criar usuário</a>
+<footer>Alterações registradas por usuário • AlfaTec</footer></main><script>
 (async()=>{try{let r=await fetch('/api/me',{cache:'no-store'});if(r.ok)location.replace('/api/app')}catch{}})();
-document.getElementById('create-toggle').onclick=()=>{const f=document.getElementById('register-form'),b=document.getElementById('create-toggle');f.hidden=!f.hidden;b.setAttribute('aria-expanded',String(!f.hidden));b.textContent=f.hidden?'Criar usuário':'Fechar cadastro';if(!f.hidden)document.getElementById('rn').focus()};
-document.getElementById('register-form').onsubmit=async e=>{e.preventDefault();const submit=document.getElementById('register-submit'),a=document.getElementById('register-alert');if(document.getElementById('rp').value!==document.getElementById('rc').value){a.style.color='#ffb1b8';a.textContent='As senhas digitadas não coincidem.';return}submit.disabled=true;a.textContent='';try{const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('ru').value,display_name:document.getElementById('rn').value,password:document.getElementById('rp').value,confirm_password:document.getElementById('rc').value})});let d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Não foi possível cadastrar');a.style.color='#a7e8c7';a.textContent=d.message;document.getElementById('register-form').reset()}catch(err){a.style.color='#ffb1b8';a.textContent=err.message}finally{submit.disabled=false}};
 document.getElementById('form').onsubmit=async e=>{e.preventDefault();const b=document.getElementById('submit'),a=document.getElementById('alert');b.disabled=true;a.textContent='';try{let r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('u').value,password:document.getElementById('p').value})});if(!r.ok){let d=await r.json().catch(()=>({}));throw Error(d.error||'Não foi possível autenticar.')}location.replace('/api/app')}catch(err){a.textContent=err.message}finally{b.disabled=false}};
 </script>
 <!-- ALFATEC_PASSWORD_EYE_V1 -->
