@@ -58,3 +58,28 @@ O projeto usa funções Node (`api/*.js`) compatíveis com a Vercel e PostgreSQL
 - Solicitações criam usuários com papel `viewer` e `is_active=false`: **ninguém obtém acesso sem a aprovação do administrador principal**.
 - Em `/admin.html`, o administrador ativa e pode promover a `editor`. Aprovação, alterações de perfil e cadastros aparecem na auditoria.
 - Sem `DATABASE_URL`, não há login nem cadastro. Configure um PostgreSQL privado em Vercel antes do primeiro acesso. `ADMIN_PASSWORD` também é obrigatório para a criação do primeiro administrador (usuário `kristopher`, não `flauzino`).
+
+## Nova versão — mensalidades da planilha e solicitações de cadastro
+
+**Sem dados pessoais no repositório:** os nomes e valores da planilha não fazem parte do código publicado.
+
+### Importar dados financeiros da planilha existente
+
+1. No login, entre com a conta **principal** e abra **Usuários e auditoria** (`/admin.html`).
+2. Em **Importar mensalidades do Google Sheets**, selecione o arquivo privado `AlfaTec_Mensalidades_Planilha_PRIVADO.json` fornecido separadamente. Ele contém os lançamentos da planilha conferidos em 22/10/2026.
+3. Confira a prévia (16 alunos, R$ 6.075 de lançamentos, R$ 2.700 de valores negativos). O importador evita cadastros duplicados, preserva Pix, pagantes e rateios e não altera valores divergentes sem o administrador marcar **Substituir valores diferentes** e gerar uma nova prévia.
+4. Clique **Confirmar importação conferida**. A operação é gravada no PostgreSQL com número de versão e auditoria. A planilha Google original permanece inalterada.
+5. Caso deseje **buscar a versão mais atual da planilha pelo servidor** com o botão **Buscar planilha online**, configure `GOOGLE_SERVICE_ACCOUNT_JSON` como segredo na Vercel, contendo o JSON de uma conta de serviço Google com autorização somente para leitura (escopo `spreadsheets.readonly`). Compartilhe a planilha original como **Leitor** com o e-mail `client_email` da conta de serviço. Opcional: `ALFATEC_SHEET_ID` para apontar outra planilha com a mesma estrutura. Sem essa credencial a busca online não funciona, mas a importação do arquivo privado funciona normalmente. Nunca publique o JSON da conta de serviço.
+
+### Notificação de novos usuários ao administrador
+
+- Qualquer novo usuário se cadastra com senha a partir de seis caracteres; a conta nasce desativada, com `approval_status=pending`.
+- O servidor grava um evento `CADASTRO_SOLICITADO` no PostgreSQL. O admin principal vê a solicitação na seção **Solicitações de novos usuários** de `/admin.html` e recebe um contador na navegação do painel (`/api/app`), atualizado a cada 90 segundos.
+- O admin pode aprovar como **Leitor** ou **Editor**, ou rejeitar. Apenas o admin principal vê os pedidos e toma essas decisões; aprovações e rejeições ficam na auditoria.
+- A notificação é **interna ao sistema**. Nenhum nome de novo usuário é enviado a provedores de e-mail ou terceiros.
+
+### Segurança e atualização
+
+- Execute `npm test` antes de cada push. A atualização cria/migra a coluna `approval_status` no primeiro acesso do backend.
+- Configurações essenciais: `DATABASE_URL` (PostgreSQL) e `ADMIN_PASSWORD` (senha inicial, definida na Vercel; não altera a senha de uma conta administrativa já criada).
+- O repositório GitHub deve permanecer privado e nunca receber o JSON privado da planilha, arquivos `.env` ou senhas.

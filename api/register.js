@@ -22,8 +22,8 @@ export default async function handler(req,res){
     if(limits[0].attempts>5)return response(res,429,{error:'Muitas solicitações. Tente novamente mais tarde.'});
     const id=randomUUID(),hash=hashPassword(password);
     const inserted=await sql`WITH created AS (
-      INSERT INTO app_users(id,username,display_name,password_hash,role,is_active)
-      VALUES (${id},${username},${displayName},${hash},'viewer',false)
+      INSERT INTO app_users(id,username,display_name,password_hash,role,is_active,approval_status)
+      VALUES (${id},${username},${displayName},${hash},'viewer',false,'pending')
       ON CONFLICT(username) DO NOTHING RETURNING id,username
     ), logged AS (
       INSERT INTO app_audit(user_id,username,action,changes)
