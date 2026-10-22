@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {requireUser,checkWrite,bodyJSON,response,withError,safeVerify} from '../lib/auth.js';
 import {sqlClient,hashPassword} from '../lib/db.js';
-const actions=new Set(['create_user','disable_user','enable_user','reset_password','change_own_password']);
+const actions=new Set(['create_user','disable_user','enable_user','reset_password','change_own_password','change_role']);
 export default async function handler(req,res){
  try{
   const user=await requireUser(req,res,['main_admin']);if(!user)return;
@@ -37,7 +37,11 @@ export default async function handler(req,res){
     const target=matches[0];
     if(!target)return response(res,404,{error:'Usuário inexistente'});
     if(target.role==='main_admin')return response(res,403,{error:'Admin principal protegido. Não pode ser desativado ou alterado por essa operação.'});
-    if(b.action==='reset_password'){
+    if(b.action==='change_role'){
+      if(!['viewer','editor'].includes(b.role))return response(res,400,{error:'Permissão inválida'});
+      await sql`UPDATE app_users SET role=${b.role} WHERE id=${target.id}`;
+      audit={action:'PERMISSAO_ALTERADA',changes:[{campo:'usuário',novo:target.username},{campo:'permissão',anterior:target.role,novo:b.role}]};
+    }else if(b.action==='reset_password'){
       const hash=hashPassword(b.password);
       await sql`UPDATE app_users SET password_hash=${hash} WHERE id=${target.id}`;
       await sql`DELETE FROM app_sessions WHERE user_id=${target.id}`;
@@ -51,5 +55,5 @@ export default async function handler(req,res){
   }
   await sql`INSERT INTO app_audit(user_id,username,action,changes) VALUES (${user.id},${user.username},${audit.action},${JSON.stringify(audit.changes)}::jsonb)`;
   response(res,200,{ok:true});
- }catch(err){if(/senha deve|duplicate key|unique constraint/i.test(err.message))return response(res,400,{error:/duplicate key|unique constraint/i.test(err.message)?'Este usuário já existe':'A senha deve ter no mínimo 12 caracteres'});withError(res,err)}
+ }catch(err){if(/Senha fora|senha deve|duplicate key|unique constraint/i.test(err.message))return response(res,400,{error:/duplicate key|unique constraint/i.test(err.message)?'Este usuário já existe':'A senha deve ter no mínimo 6 caracteres'});withError(res,err)}
 }
