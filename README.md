@@ -17,7 +17,7 @@ Sistema de controle de mensalidades, pagantes, conciliação e relatórios da Al
 2. Configure `ADMIN_PASSWORD` somente em **Vercel → Project → Settings → Environment Variables**, tipo *Sensitive*. A primeira inicialização cria o usuário **Kristopher** usando o hash `scrypt` da senha informada. Depois, altere essa senha na área do administrador (recomendado, especialmente se foi citada numa conversa).
 3. Configure `DATABASE_URL` como segredo na Vercel, apontando para um PostgreSQL com TLS. Não há sincronização real de dados nem auditoria confiável sem banco.
 4. Crie o repositório **privado** `alfatec-financeiro`. Antes de enviar para o GitHub, confira a lista de arquivos com `git status` e garanta que `AlfaTec_Dados_Iniciais_PRIVADO.json` (arquivo entregue separadamente) não está no commit.
-5. Perfis: `main_admin` vê histórico e gerencia usuários; `editor` altera dados; `viewer` lê apenas. A autorização é validada pelo backend. As senhas individuais de novos usuários exigem no mínimo 12 caracteres.
+5. Perfis: `main_admin` vê histórico e gerencia usuários; `editor` altera dados; `viewer` lê apenas. A autorização é validada pelo backend. As senhas individuais de novos usuários exigem no mínimo 6 caracteres.
 6. O cookie de sessão é `HttpOnly; Secure; SameSite=Strict`, com expiração de 12 horas; a API exige origem compatível para gravações e não oferece CORS a terceiros.
 7. Os eventos incluem usuário autenticado, ação, timestamp, diferenças de valores e campos. A API não expõe exclusão de eventos de auditoria; faça backups periódicos do banco de dados e proteja as permissões do banco.
 8. O aplicativo original guarda alguns dados no navegador. **Esta versão remove a gravação local do sistema e salva no servidor.** Dados editados anteriormente no navegador não migram automaticamente; importe um backup JSON na área **Configurações** depois do login.
@@ -51,3 +51,10 @@ O projeto usa funções Node (`api/*.js`) compatíveis com a Vercel e PostgreSQL
 - A lógica de rateio existente foi preservada. Como qualquer conciliação bancária, vínculos sugeridos entre pagantes e alunos devem ser confirmados.
 - Importação de dados pessoais: somente em ambiente protegido e com a conta administrativa, nunca num repositório público.
 - Existe controle contra alterações concorrentes: se dois editores mudarem o mesmo estado, o segundo receberá aviso para recarregar os dados, em vez de sobrescrever silenciosamente.
+
+## Cadastro pela tela de login (v1.1)
+
+- O botão **Criar usuário** aceita senha de 6 a 256 caracteres; recomendamos 12 ou mais.
+- Solicitações criam usuários com papel `viewer` e `is_active=false`: **ninguém obtém acesso sem a aprovação do administrador principal**.
+- Em `/admin.html`, o administrador ativa e pode promover a `editor`. Aprovação, alterações de perfil e cadastros aparecem na auditoria.
+- Sem `DATABASE_URL`, não há login nem cadastro. Configure um PostgreSQL privado em Vercel antes do primeiro acesso. `ADMIN_PASSWORD` também é obrigatório para a criação do primeiro administrador (usuário `kristopher`, não `flauzino`).
