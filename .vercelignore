@@ -1,0 +1,6 @@
+.git/
+.env
+.env.*
+private/*dados*.json
+private/*seed*.json
+*.zip
