@@ -1,0 +1,10 @@
+{
+  "name": "alfatec-financeiro",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gestão financeira AlfaTec com autenticação e auditoria no servidor",
+  "engines": {"node": ">=20"},
+  "scripts": {"test": "node --test tests/*.test.js"},
+  "dependencies": {"@neondatabase/serverless": "^1.0.1"}
+}
