@@ -44,11 +44,41 @@ function avisoSheetV10(view){
 function wireSheetV10(){
  document.querySelectorAll('[data-v10-link]').forEach(b=>b.onclick=()=>openPayerLink(b.dataset.v10Link));
 }
+// ALFATEC_VINCULOS_CONFIRMADOS_V11
+async function confirmarVinculosV11(){
+ if(SERVER.user.role!=='main_admin'){toast('Somente o administrador pode confirmar vínculos.',true);return;}
+ if(syncBlocked){toast('Há um conflito de edição. Recarregue a página antes de confirmar.',true);return;}
+ await saveChain;
+ if(syncBlocked)return;
+ const known=new Set(db.students.map(s=>s.id));
+ const proposals=db.payers.flatMap(p=>(p.suggestions||[])
+   .filter(id=>known.has(id)&&!(p.studentIds||[]).includes(id))
+   .map(id=>({p,id})));
+ if(!proposals.length){toast('Não há vínculos sugeridos a confirmar.');return;}
+ if(!window.confirm('Confirmar '+proposals.length+' associação(ões) entre pagantes e alunos? Esta decisão ficará registrada na auditoria. Não confirma recebimento de Pix nem quitação de mensalidades.'))return;
+ for(const p of db.payers){
+   const additions=(p.suggestions||[]).filter(id=>known.has(id)&&!(p.studentIds||[]).includes(id));
+   if(!additions.length)continue;
+   p.studentIds=[...new Set([...(p.studentIds||[]),...additions])];
+   p.suggestions=(p.suggestions||[]).filter(id=>!additions.includes(id));
+ }
+ if(!save()){toast('Alterações não gravadas. Verifique a sessão e recarregue.',true);return;}
+ await saveChain;
+ if(syncBlocked){toast('Confirmação não foi salva. Verifique o aviso do servidor.',true);return;}
+ render();
+ toast('Vínculos de alunos confirmados e registrados na auditoria.');
+}
 function renderSheetV10(tabName){
  const v=visaoPagantesPlanilha(db);
- const controls=`${SERVER.user.role==='main_admin'?'<button type="button" class="button secondary" id="bank-import">Importar/atualizar pagantes</button>':''}`+
+ let controls=`${SERVER.user.role==='main_admin'?'<button type="button" class="button secondary" id="bank-import">Importar/atualizar pagantes</button>':''}`+
   '<button type="button" class="button secondary" id="bank-csv">Exportar planilha de vínculos</button>'+
   '<button type="button" class="button primary" id="bank-report">Gerar relatório</button>';
+ if(SERVER.user.role==='main_admin'){
+  const validStudentIds=new Set(db.students.map(s=>s.id));
+  const pendingV11=db.payers.reduce((n,p)=>n+(p.suggestions||[])
+    .filter(id=>validStudentIds.has(id)&&!(p.studentIds||[]).includes(id)).length,0);
+  if(pendingV11)controls+='<button type="button" class="button secondary" id="v11-confirm-links">Confirmar '+pendingV11+' vínculo(s) sugerido(s)</button>';
+ }
  renderTop(tabName,'Alunos e pagantes vinculados · valores de referência exclusivos da planilha',controls);
  const search=tabName==='Pagantes'?payerSearch:linkSearch;
  const rows=recordsSheetV10(v,search);
@@ -59,10 +89,8 @@ function renderSheetV10(tabName){
  '<input id="v10-search" style="width:100%" placeholder="Pesquisar nome" value="'+esc(search)+'"></div>'+
  '<button class="button secondary" type="button" id="v10-clear">Limpar</button></div>'+
  tableSheetV10(rows,true)+'<p class="source-caption">Valores financeiros vêm dos lançamentos de mensalidade e não dos saldos das contas bancárias.</p></article>'+
- (v.orphanPayers.length?'<article class="panel bank-panel"><h3>Pagantes ainda sem aluno relacionado</h3>'+ 
- '<p class="muted">Sem valores apresentados até que seja identificado o aluno correto.</p>'+ 
- '<div class="v10-orphans">'+v.orphanPayers.map(p=>'<div class="v10-orphan"><span>'+esc(p.name)+'</span>'+ 
- (SERVER.user.role!=='viewer'?'<button type="button" class="button secondary slim" data-v10-link="'+esc(p.id)+'">Vincular aluno</button>':'')+'</div>').join('')+'</div></article>':'');
+ ''; // ALFATEC_VINCULOS_CONFIRMADOS_V11 — lista sem aluno removida somente da interface
+ $('v11-confirm-links')?.addEventListener('click',confirmarVinculosV11);
  $('bank-import')?.addEventListener('click',openBankImport);
  $('bank-csv').onclick=bankExportCSV;
  $('bank-report').onclick=()=>printReport('payers');
