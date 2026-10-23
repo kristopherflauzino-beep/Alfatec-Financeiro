@@ -65,6 +65,18 @@
 }
 @media(min-width:761px){.sidebar{transform:none!important}}
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none!important}}
+
+/* ALFATEC_SALDO_CONTABIL_PIX_V5 */
+.pix-ledger{margin:16px 0;padding:19px;background:#10243a;border:1px solid #355473;border-radius:14px}
+.pix-ledger h2{margin:0 0 5px;font-size:19px}
+.pix-ledger .pix-ledger-sub{margin:0 0 14px;color:#a9bfd6;font-size:13px}
+.pix-ledger-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}
+.pix-ledger-stats div{background:#0a1d31;border:1px solid #31516c;border-radius:10px;padding:13px;min-width:0}
+.pix-ledger-stats small{font-size:12px;color:#b3ccdf;display:block;min-height:28px}
+.pix-ledger-stats strong{display:block;margin-top:7px;font-size:21px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pix-ledger-note{margin-top:13px;font-size:13px;line-height:1.55;color:#d1dfed}
+.pix-ledger-warning{padding:12px;border-radius:9px;border:1px solid #7b6441;background:#362d1e;color:#ffdaaa}
+@media(max-width:760px){.pix-ledger{padding:14px}.pix-ledger-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.pix-ledger-stats strong{font-size:17px}}
 </style>
 </head>
 <body>
@@ -200,10 +212,71 @@ function spreadsheetAmount(month){return sum(students().map(s=>Math.max(0,val(s,
 function proofMonthlyRows(){return bankMonthList().map(m=>{const a=bankRows().filter(t=>t.date.startsWith(m)&&bankValid(t));return {month:m,count:a.length,amount:sum(a.map(t=>t.amount)),sheet:spreadsheetAmount(m),linked:a.filter(t=>confirmedAllocations(t).length).length}})}
 function bankBanner(){return `<div class="bank-alert"><strong>Conferência segura:</strong> valor recebido na conta não identifica automaticamente o aluno nem a competência da mensalidade. Pix de R$ 270/540/810 podem corresponder a vários alunos ou meses. Vínculos e competência são confirmados separadamente pelo administrador. A planilha Google Sheets não é modificada pelo HTML.</div>`}
 function bankSheetLink(){return `<a class="button secondary" target="_blank" rel="noopener noreferrer" href="${SHEET_MOBILE_URL}">↗ Abrir planilha (celular ou computador)</a>`}
+// Mantém os recebimentos brutos separados dos lançamentos líquidos da planilha.
+// Nunca escolhe ou descarta operações apenas para igualar totais.
+const moneyCent=v=>Number.isFinite(Number(v))?Math.round(Number(v)*100):0;
+function resumoContabilPix(state){
+ if(!state||!Array.isArray(state.students)||!Array.isArray(state.payTransactions)||!Array.isArray(state.months))throw Error('Dados da planilha ou dos Pix indisponíveis');
+ const expected=new Map();let positive=0,negative=0;
+ for(const s of state.students){
+   for(const m of state.months){
+     const n=s.payments?.[m.id],amount=n===null||n===undefined?null:moneyCent(n);
+     if(amount!==null){if(amount>0)positive+=amount;else if(amount<0)negative+=-amount;}
+     expected.set(`${s.id}|${m.id}`,amount);
+   }
+ }
+ const fee=moneyCent(state.settings?.monthlyFee || 135);
+ if(fee<=0)throw Error('Mensalidade inválida');
+ const allocatedByMonth=new Map(),invalid=[],receiptIds=[],unassignedIds=[];
+ let pix=0,allocated=0;
+ for(const t of state.payTransactions){
+   const amount=moneyCent(t.amount);
+   if(t.status!=='recebido'||amount<=0||amount%fee!==0)continue;
+   pix+=amount;receiptIds.push(t.id);
+   const parts=Array.isArray(t.allocations)&&t.allocations.length?t.allocations:(t.studentId?[{studentId:t.studentId,competence:t.competence,amount:t.amount}]:[]);
+   if(!parts.length){unassignedIds.push(t.id);continue;}
+   let txSum=0;let issue='';const txParts=[];const seen=new Set();
+   for(const a of parts){
+     const cents=moneyCent(a.amount),key=`${a.studentId}|${a.competence}`;
+     if(!expected.has(key)||cents<=0||seen.has(key)){issue='Rateio inválido, duplicado ou com aluno/competência inexistente';break}
+     seen.add(key);txSum+=cents;txParts.push({key,cents});
+   }
+   if(txSum>amount)issue='Rateio maior que o Pix recebido';
+   if(issue){invalid.push({id:t.id,reason:issue});unassignedIds.push(t.id);continue;}
+   allocated+=txSum;
+   for(const a of txParts)allocatedByMonth.set(a.key,(allocatedByMonth.get(a.key)||0)+a.cents);
+   if(txSum<amount)unassignedIds.push(t.id);
+ }
+ let proven=0,exactMonths=0,divergentMonths=0;
+ const monthRows=[];
+ for(const [key,amount] of expected){
+   const assigned=allocatedByMonth.get(key)||0;
+   if(amount>0&&assigned===amount){proven+=assigned;exactMonths++}
+   else if(assigned>0)divergentMonths++;
+   monthRows.push({key,amount,assigned,status:amount>0&&assigned===amount?'conciliado':assigned>0?'divergente':amount<0?'em_aberto':'sem_vinculo'});
+ }
+ return {positive,negative,net:positive-negative,pix,differenceToNet:pix-(positive-negative),differenceToPositive:pix-positive,
+  allocated,unassigned:pix-allocated,proven,exactMonths,divergentMonths,eligibleCount:receiptIds.length,
+  unassignedIds,invalid,monthRows};
+}
+
+
+// ALFATEC_SALDO_CONTABIL_PIX_V5: valor líquido da planilha NÃO é total de recebimentos Pix.
+function painelSaldoContabilPix(){
+ const c=resumoContabilPix(db);
+ const money=x=>fmt(x/100);
+ const cells=[['Saldo líquido da planilha',c.net],['Pix recebidos elegíveis',c.pix],['Diferença entre totais',c.differenceToNet],['Mensalidades comprovadas',c.proven]];
+ const figures=cells.map(([name,val])=>'<div><small>'+esc(name)+'</small><strong>'+money(val)+'</strong></div>').join('');
+ const note=c.differenceToNet===0
+ ?'Os totais matemáticos são iguais, mas isso NÃO comprova que cada Pix pertence à mesma competência e ao aluno correto.'
+ :'Os totais não coincidem. Os Pix não serão excluídos, repartidos ou marcados como conciliados para forçar a igualdade.';
+ return '<section class="pix-ledger" aria-label="Conferência de saldo e recebimentos"><h2>Conferência Pix × planilha</h2><p class="pix-ledger-sub">Saldo contábil e valor recebido são conceitos diferentes.</p><div class="pix-ledger-stats">'+figures+'</div><div class="pix-ledger-note">Mensalidades positivas: <b>'+money(c.positive)+'</b> · Valores negativos em aberto: <b>'+money(c.negative)+'</b> · Pix ainda não distribuídos integralmente: <b>'+money(c.unassigned)+'</b> ('+c.unassignedIds.length+' operações). Mensalidades com vínculo de valor exato: <b>'+c.exactMonths+'</b>.</div><p class="pix-ledger-note pix-ledger-warning">'+note+' Os extratos começam em junho/2026, enquanto a planilha inclui maio/2026. É necessário atribuir o ID Pix ao aluno e à competência para conciliar os lançamentos.'+(c.invalid.length?' Foram detectados '+c.invalid.length+' rateio(s) inválido(s).':'')+'</p></section>';
+}
+
 function renderPayers(){const stats=bankStats(),monthOpts=bankMonthList();renderTop('Pagantes','Análise consolidada dos 5 extratos Mercado Pago • junho–outubro de 2026',`${SERVER.user.role==='main_admin'?'<button class="button secondary" id="bank-import">Importar extratos</button>':''}<button class="button secondary" id="bank-csv">Exportar CSV</button><button class="button primary" id="bank-report">Relatório com logo</button>`);
 const list=payerFilters(),monthTx=bankRows().filter(t=>!payerMonth||t.date.startsWith(payerMonth)),monthEligible=monthTx.filter(bankValid),periodAmount=sum(monthEligible.map(t=>t.amount));
 $('page').innerHTML=`<div class="payer-kpis"><div class="payer-kpi"><small>PIX VÁLIDOS · TODOS OS EXTRATOS</small><strong class="amount-big">${fmt(stats.amount)}</strong><em>${stats.valid.length} operações de R$ 135 ou múltiplos</em></div><div class="payer-kpi"><small>PAGANTES IDENTIFICADOS</small><strong>${stats.people}</strong><em>Nomes repetidos consolidados</em></div><div class="payer-kpi"><small>VALOR NO PERÍODO FILTRADO</small><strong>${fmt(periodAmount)}</strong><em>${monthEligible.length} recebimentos elegíveis</em></div><div class="payer-kpi"><small>OPERAÇÕES NÃO ATRIBUÍDAS</small><strong>${stats.unlinked}</strong><em>Saldo sem vínculo: ${fmt(stats.unallocated)} / ${fmt(stats.amount)}</em></div></div>
-${bankBanner()}
+${bankBanner()} ${painelSaldoContabilPix()}
 <article class="panel bank-panel"><div class="panel-header"><div><h2>Consulta por pagante</h2><p>Filtre por nome, aluno, período e situação. Os valores são a soma das operações elegíveis.</p></div></div><div class="flex-field"><div><label>Buscar pagante ou aluno</label><input id="payer-search" placeholder="Nome, razão social ou aluno" value="${esc(payerSearch)}" style="width:100%"></div><div><label>Mês do recebimento</label><select id="payer-month" style="width:100%"><option value="">Todos os meses</option>${monthOpts.map(m=>`<option ${payerMonth===m?'selected':''} value="${m}">${esc(monthLabel(m))}</option>`).join('')}</select></div><div><label>Categoria</label><select id="payer-only" style="width:100%"><option value="">Todos</option><option value="elegiveis" ${payerOnly==='elegiveis'?'selected':''}>Pix elegíveis</option><option value="pendentes" ${payerOnly==='pendentes'?'selected':''}>Pix com saldo não distribuído</option><option value="outros" ${payerOnly==='outros'?'selected':''}>Outros / internos / revisão</option></select></div><button class="button secondary" id="payer-clear">Limpar filtros</button></div>
 <div class="table-wrap" style="margin-top:16px"><table class="data-table bank-table"><thead><tr><th>Pagante identificado no extrato</th><th>Pix no filtro</th><th>Total elegível</th><th>Aluno(s) vinculado(s)</th><th>Ações</th></tr></thead><tbody>${list.map(p=>{const r=p.matching.filter(bankValid),v=sum(r.map(t=>t.amount));return `<tr><td><span class="payer-name">${esc(p.name)}</span><div class="payer-row-note">${p.matching.length} transação(ões) exibida(s)</div></td><td>${r.length}</td><td class="amount-big">${fmt(v)}</td><td>${linkedStudents(p).length?esc(linkedStudents(p).join(' · ')):'<span class="muted">A confirmar</span>'}</td><td><div class="payer-actions"><button class="button secondary" data-focus="${p.id}">Movimentos</button><button class="button primary" data-link="${p.id}">Vincular</button><button class="button secondary" data-reportpayer="${p.id}">PDF</button></div></td></tr>`}).join('')||'<tr><td colspan="5" class="muted" style="padding:20px">Nenhum pagante encontrado para estes filtros.</td></tr>'}</tbody></table></div></article>
 ${payerFocus?payerDetailCard(payerFocus):''}
