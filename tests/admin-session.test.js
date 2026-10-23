@@ -8,7 +8,7 @@ const script=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 test('painel exige verificar sessão e autenticação antes de expor ações',()=>{
  assert.ok(html.includes('<main id="admin-main" hidden>'));
  assert.ok(html.includes('<form id="auth-form" hidden>'));
- assert.ok(script.endsWith('validateSession();\n'));
+ assert.ok(script.trimEnd().endsWith('validateSession();'));
  assert.ok(!script.endsWith('load();\n'));
  assert.ok(script.includes("credentials:'same-origin'"));
 });
